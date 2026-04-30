@@ -107,6 +107,7 @@ factory insights
 ## Documentation
 
 - [docs/getting-started.md](docs/getting-started.md) — First-run guide
+- [docs/walkthrough.md](docs/walkthrough.md) — End-to-end example exercising every station, also usable as a smoke test
 - [docs/architecture.md](docs/architecture.md) — System architecture and runtime
 - [docs/concepts.md](docs/concepts.md) — Glossary: Line, Station, Worktree, Skill, ...
 - [docs/line-spec.md](docs/line-spec.md) — `.factory/lines/*.yaml` specification
