@@ -1,0 +1,32 @@
+# .factory/config.yaml — project-level factory configuration
+#
+# All keys are optional. Missing keys fall back to built-in defaults.
+
+# Default model id passed to the bot adapter (Claude Code) for main bots.
+# Use any model the `claude` CLI accepts (e.g. claude-opus-4-7, claude-sonnet-4-6).
+defaultModel: claude-sonnet-4-6
+
+# Default model for reviewer bots — usually a different model so the review
+# brings independent perspective.
+reviewerModel: claude-haiku-4-5
+
+# Override the binary name/path if `claude` is not on PATH.
+# claudeBin: /usr/local/bin/claude
+
+# Auto-detect when input mentions "spec", "doc", "requirement" and run intake first.
+autoIntake: false
+
+# Default budgets for any line that does not specify its own.
+budget:
+  tokens: 1000000
+  costUsd: 5.0
+  durationMin: 60
+  toolCalls: 500
+  subAgentMaxDepth: 2
+  subAgentMaxCount: 5
+
+# Patterns that will be redacted from prompts before sending to the LLM.
+# Each entry is a JavaScript-compatible regex (without flags).
+redactPatterns:
+  - "AKIA[0-9A-Z]{16}"
+  - "(?i)password\\s*[:=]\\s*\\S+"

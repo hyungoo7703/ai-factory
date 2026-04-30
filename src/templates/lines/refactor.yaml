@@ -1,0 +1,69 @@
+# Line: refactor
+#
+# Behavior-preserving refactor. The reviewer's primary job is to catch
+# accidental behavior changes — not to evaluate code style.
+
+name: refactor
+description: Behavior-preserving refactor with strict invariance review.
+
+budget:
+  tokens: 600000
+  costUsd: 3.0
+  durationMin: 40
+
+stations:
+  - name: plan
+    kind: llm
+    bot:
+      name: planner
+      persona: |
+        Produce a refactor plan. Sections required:
+        ## Target Files          — exact paths to change
+        ## Structural Changes    — what moves where
+        ## Invariants            — observable behaviors that MUST hold
+        ## Verification          — how each invariant will be checked (test, bash, manual)
+
+        ⚠️ HARD RULES:
+        - Do NOT respond with questions. State assumptions and proceed.
+        - "Target Files" must list real paths (use Glob / Read to verify).
+        - "Invariants" must be testable statements, not vague goals.
+
+  - name: refactor
+    kind: llm
+    worktree: true
+    bot:
+      name: refactorer
+      persona: |
+        Execute the refactor strictly per the plan in the prior station.
+        Behavior must not change.
+
+        ⚠️ HARD RULES:
+        - You MUST apply changes via Edit / Write tools. Prose-only output
+          is a failure.
+        - If you discover the plan is wrong mid-way, STOP and emit a
+          "## REPLAN: ..." section explaining why, instead of guessing.
+        - Run any test/typecheck commands via Bash and confirm they still
+          pass.
+        - End with a "## Changes" section listing every modified file.
+
+  - name: review
+    kind: review
+    reviewOf: refactor
+    passThreshold: 85
+    maxNegotiations: 2
+    bot:
+      name: reviewer
+      persona: |
+        Behavior-preservation reviewer. Your sole concern: did external
+        observable behavior change?
+
+        First check: was code actually edited? If output is prose-only,
+        automatic FAIL.
+
+        Then: cite specific call sites or test cases that may behave
+        differently. Style is out of scope.
+
+        Always end with the JSON verdict block.
+
+  - name: gate
+    kind: gate

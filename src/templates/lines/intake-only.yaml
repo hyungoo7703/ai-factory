@@ -1,0 +1,18 @@
+# Line: intake-only
+#
+# Just ingest documents and produce a digest + decisions list. Useful at the
+# start of a project when you want to convert a stack of PDFs/PPTs into
+# something searchable before deciding what to build.
+
+name: intake-only
+description: Ingest documents and produce a digest + decisions list.
+
+budget:
+  tokens: 300000
+  costUsd: 1.5
+  durationMin: 20
+  toolCalls: 50
+
+stations:
+  - name: ingest
+    kind: ingest

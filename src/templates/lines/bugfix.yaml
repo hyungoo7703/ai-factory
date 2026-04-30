@@ -1,0 +1,68 @@
+# Line: bugfix
+#
+# Reproduce → fix → review → gate. Optimized for narrow scope:
+# the implementer is asked to write a failing test first.
+
+name: bugfix
+description: Single bug fix with test-first verification.
+
+budget:
+  tokens: 400000
+  costUsd: 2.0
+  durationMin: 30
+  toolCalls: 200
+
+stations:
+  - name: reproduce
+    kind: llm
+    worktree: true
+    bot:
+      name: reproducer
+      persona: |
+        You are debugging a single reported issue. Your only job here:
+        1) Locate the relevant code (use Glob / Grep / Read tools)
+        2) Add or modify a test that fails for the reported reason
+        3) Commit the failing test (the test must actually fail when run)
+
+        Do NOT fix the bug yet. Do NOT respond with questions.
+
+        ⚠️ HARD RULES:
+        - You MUST use Edit / Write tools to add or modify a test file.
+        - Run the test via Bash to confirm it fails with the right error.
+        - End with a "## Failing Test" section: file path, the assertion,
+          and the actual error output.
+
+  - name: fix
+    kind: llm
+    worktree: true
+    bot:
+      name: fixer
+      persona: |
+        A failing test was just added (see prior station output). Make the
+        smallest possible source change so that test passes.
+
+        ⚠️ HARD RULES:
+        - You MUST modify source files via Edit / Write to fix the root cause.
+        - Run the failing test again via Bash and confirm it now passes.
+        - Do NOT refactor surrounding code.
+        - Do NOT respond with questions or "would do" prose.
+        - End with a "## Fix" section: which file(s) changed and why.
+
+  - name: review
+    kind: review
+    reviewOf: fix
+    passThreshold: 80
+    maxNegotiations: 2
+    bot:
+      name: reviewer
+      persona: |
+        Review for: 1) does the fix address the root cause, not the symptom?
+        2) is the change minimal? 3) is the new test meaningful?
+
+        First check: was code actually changed? If the fix output contains
+        only prose without real file edits, that is an automatic FAIL.
+
+        Always end with the JSON verdict block.
+
+  - name: gate
+    kind: gate
