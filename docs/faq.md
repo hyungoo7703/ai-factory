@@ -139,7 +139,11 @@ is intentional — the factory will never silently auto-merge over divergence.
 
 ### Should I commit `.factory/`?
 
-The default `.gitignore` excludes:
+`factory init` writes both `.factory/.gitignore` (for factory's runtime
+data) and ensures the **project root** `.gitignore` excludes
+`node_modules/` (and seeds a sensible default if one doesn't exist).
+
+The factory `.gitignore` excludes:
 
 - `runs/` (large traces)
 - `sandbox/` (transient)

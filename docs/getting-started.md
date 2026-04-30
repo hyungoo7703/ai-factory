@@ -70,8 +70,15 @@ This creates:
 ├── config.yaml           # models, budgets, default policies
 ├── lines/                # pipelines (feature, bugfix, refactor, intake-only)
 ├── skills/               # domain knowledge (coding-style, review-criteria, security-auditor)
-└── .gitignore            # excludes runs/, sandbox/, intake/
+└── .gitignore            # excludes runs/, sandbox/, intake/, memory.jsonl
 ```
+
+It also creates (or augments) the **project root's** `.gitignore` so that
+`node_modules/`, `dist/`, `.env*`, and a few editor/OS patterns are
+excluded. This is required: without it, the implement station's auto-commit
+captures dependency directories into the worktree branch and the gate's
+fast-forward merge will fail. If `.gitignore` already exists, only
+`node_modules/` is appended idempotently.
 
 Open `config.yaml` to confirm the models you want to use:
 

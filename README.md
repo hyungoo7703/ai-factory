@@ -83,7 +83,7 @@ factory insights
 
 | Command | Description |
 |------|------|
-| `factory init` | Initialize `.factory/` (config, lines, skills seed) |
+| `factory init` | Initialize `.factory/` (config, lines, skills seed) and ensure project root `.gitignore` excludes `node_modules/`, `dist/`, `.env*` |
 | `factory intake [paths...]` | Ingest documents → searchable snapshot |
 | `factory run <line> [input]` | Execute a line |
 | `factory resume <runId>` | Resume a paused run |
