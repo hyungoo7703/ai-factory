@@ -101,8 +101,20 @@ factory insights
 ## Bundled Skills
 
 - **`coding-style`** — TypeScript/JS coding style (auto-triggers on ts/js)
-- **`review-criteria`** — Review rubric + JSON verdict format
-- **`security-auditor`** — OWASP Top 10 (auto-triggers on payment/auth, etc.)
+- **`review-criteria`** — Review rubric + JSON verdict format (language-neutral)
+- **`security-auditor`** — OWASP Top 10 (auto-triggers on payment/auth, etc.; language-neutral)
+
+## Language Support
+
+The engine itself (worktree isolation, review loop, intake search, budget
+caps) is language-neutral — Claude Code can author any language inside the
+worktree. The bundled `coding-style` skill, however, only covers
+TypeScript/JavaScript. For Python, Go, Rust, C#, Java, etc., drop a
+project-specific skill at `.factory/skills/coding-style.md` (the user file
+takes precedence over the bundled default) — see
+[docs/skills.md](docs/skills.md). The bundled `feature` line auto-detects
+language/framework from your project's manifest (package.json, pyproject.toml,
+go.mod, Cargo.toml, etc.) before making assumptions.
 
 ## Documentation
 

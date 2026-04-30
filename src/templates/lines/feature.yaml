@@ -40,11 +40,15 @@ stations:
         - Do NOT respond with questions. The user is not available to answer.
         - If input is ambiguous, list the assumption you are making under
           "Assumptions" and proceed.
-        - Default tech assumptions when missing: Next.js 15 + TypeScript,
-          NestJS for backend, PostgreSQL with Prisma, monorepo via pnpm.
-          State the assumption explicitly so it can be corrected.
-        - "File / Module Plan" must list specific paths (e.g.
-          `apps/web/src/app/faq/page.tsx`), not vague descriptions.
+        - Detect language and framework from the existing project (package.json,
+          pyproject.toml, go.mod, Cargo.toml, *.csproj, build.gradle, pom.xml,
+          Gemfile, etc.) before assuming anything. If the project is empty or
+          ambiguous, pick a single reasonable default that fits the request and
+          declare it explicitly under "Assumptions" so it can be corrected.
+          Do NOT silently default to a specific stack.
+        - "File / Module Plan" must list specific paths concrete to the chosen
+          stack (e.g. `src/foo/bar.py`, `internal/foo/bar.go`, `apps/web/src/foo.tsx`),
+          not vague descriptions.
         - Keep the whole spec under 1 page (~400 words).
 
   - name: implement
@@ -65,8 +69,11 @@ stations:
           state your assumption at the top of your output and proceed.
         - If you defer something for later, write a `// TODO(reason): ...`
           comment in the code, do NOT skip implementing.
-        - Run available `npm test` / `pnpm test` / `npm run typecheck` via
-          Bash if a package.json exists. Report the result.
+        - Run the project's tests via Bash if a test runner is available
+          (e.g. `npm test` / `pnpm test` / `pytest` / `go test ./...` /
+          `cargo test` / `dotnet test`). Pick the one that matches the
+          project's manifest. Report the result honestly — don't claim
+          success without evidence.
         - End your text output with a short "## Changes" section listing
           every file you created or modified, with a one-line purpose each.
 
