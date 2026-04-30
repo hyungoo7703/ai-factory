@@ -32,6 +32,11 @@ clone (see [README](../README.md)).
 
 ---
 
+> 💡 The shell snippets below use POSIX syntax (bash / zsh / Git Bash on
+> Windows). PowerShell users: every command works as-is *except* the
+> heredoc in step 2 — see the PowerShell-friendly alternative there. For
+> step 6, also see the PowerShell cleanup variant.
+
 ## 1. Bootstrap a target project
 
 ```bash
@@ -63,11 +68,9 @@ What just happened:
 
 ## 2. Drop in a tiny spec and ingest it
 
-Create the spec the implementer will read:
+Create `docs/payment-spec.md` (use your editor of choice) with this content:
 
-```bash
-mkdir -p docs
-cat > docs/payment-spec.md <<'SPEC'
+```markdown
 # Card Payment Validator — Spec
 
 ## Goal
@@ -96,7 +99,35 @@ sent to the upstream payment gateway. No I/O, no globals.
 ## Constraints
 - No runtime dependencies. Plain TypeScript.
 - Each rule has at least one unit test (use `node:test` and `node --test`).
+```
+
+Or, write it from the shell directly:
+
+**bash / zsh / Git Bash**
+```bash
+mkdir -p docs
+cat > docs/payment-spec.md <<'SPEC'
+# Card Payment Validator — Spec
+
+## Goal
+A pure TypeScript module that validates a credit card payload before it is
+sent to the upstream payment gateway. No I/O, no globals.
+... (paste the rest of the spec above)
 SPEC
+```
+
+**PowerShell** (use a single-quoted here-string `@'...'@`; the closing `'@`
+must start at column 0):
+```powershell
+New-Item -ItemType Directory -Force -Path docs | Out-Null
+@'
+# Card Payment Validator — Spec
+
+## Goal
+A pure TypeScript module that validates a credit card payload before it is
+sent to the upstream payment gateway. No I/O, no globals.
+... (paste the rest of the spec above)
+'@ | Set-Content -Encoding utf8 docs/payment-spec.md
 ```
 
 Now ingest it:
@@ -226,12 +257,22 @@ Already-completed stations are skipped; only pending ones re-execute.
 
 ## 6. Cleanup
 
+**bash / zsh / Git Bash**
 ```bash
 git checkout main                  # or whatever your default branch is
 git branch | grep factory/         # list remaining factory branches
 git branch -D factory/feature/...  # delete branches you don't want to keep
 rm -rf .factory/sandbox            # ephemeral worktrees (also cleaned by `git worktree prune`)
 rm -rf .factory/runs               # trace + per-station outputs (kept by default)
+```
+
+**PowerShell**
+```powershell
+git checkout main
+git branch | Select-String "factory/"
+git branch -D factory/feature/...
+Remove-Item -Recurse -Force .factory/sandbox
+Remove-Item -Recurse -Force .factory/runs
 ```
 
 `config.yaml`, `lines/`, and `skills/` are intended to be committed so the

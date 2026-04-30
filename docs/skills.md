@@ -1,14 +1,15 @@
 # Skills
 
-스킬은 `.factory/skills/<name>.md` 파일로 작성하는 도메인 지식입니다.
-LLM의 시스템 프롬프트에 *추가 컨텍스트*로 주입되어 모델이 프로젝트의 관습,
-규약, 위험 영역을 알 수 있게 합니다.
+A skill is a `.md` file under `.factory/skills/<name>.md` that captures
+domain knowledge. The body is injected into the LLM's system prompt as
+*extra context* so the model knows your project's conventions, rules, and
+risk areas.
 
-## 작성 형식
+## Format
 
 ```markdown
 ---
-triggers: ["payment", "결제", "card"]
+triggers: ["payment", "card", "checkout"]
 agent:
   name: payment-domain
   outputs: ["payment-design.md"]
@@ -16,55 +17,58 @@ agent:
 
 # Payment Module Conventions
 
-- 모든 금액은 정수 minor unit (KRW 100원 = 100, USD $1 = 100)
-- 카드사 코드는 `lib/payment/codes.ts`의 enum
-- 환불은 `payments.refund` 트랜잭션으로만 처리
-- 결제 실패 시 외부에 노출되는 메시지는 `i18n/payment-errors.ts` 참조
+- All amounts are integer minor units (USD $1 = 100, KRW 100원 = 100)
+- Card brand codes live in the enum at `lib/payment/codes.ts`
+- Refunds go through `payments.refund` only — never UPDATE the table
+- User-facing error strings come from `i18n/payment-errors.ts`
 ```
 
-## Frontmatter (선택)
+## Frontmatter (optional)
 
-| 키 | 타입 | 의미 |
+| Key | Type | Meaning |
 |----|------|------|
-| `triggers` | string[] | 입력에 포함되면 자동 주입 (대소문자 무관 substring) |
-| `agent.name` | string | (v2) 별도 sub-agent로 등록 가능하게 함 |
-| `agent.triggers` | string[] | (v2) agent 자동 호출 트리거 |
-| `agent.inputs` | string[] | (v2) 의존하는 입력 파일 |
-| `agent.outputs` | string[] | (v2) 만들어야 할 산출물 |
+| `triggers` | string[] | Auto-inject when any keyword appears in the input (case-insensitive substring) |
+| `agent.name` | string | (v2) Register the skill as a separate sub-agent |
+| `agent.triggers` | string[] | (v2) Triggers for auto-invoking the agent |
+| `agent.inputs` | string[] | (v2) Input files the agent depends on |
+| `agent.outputs` | string[] | (v2) Files the agent must produce |
 
-frontmatter가 없어도 됩니다 — 그러면 본문만 사용 가능.
+Frontmatter is optional — a body-only file works.
 
-## 주입 시점
+## When skills are injected
 
-매 LLM station 시작 시:
+At the start of every LLM station:
 
-1. `bot.skills:`에 명시된 항목 → **무조건 포함** (explicit)
-2. `triggers:`가 있는 모든 스킬 → 입력 텍스트와 매칭 → 매칭되면 **자동 포함** (auto)
+1. Skills listed in `bot.skills:` → **always included** (explicit)
+2. Every skill with `triggers:` → matched against the input → **auto-included**
+   if any trigger hits
 
-두 경우 모두 Claude Code의 `--append-system-prompt`로 합쳐져 전달됩니다.
+Both sets are concatenated and forwarded via Claude Code's
+`--append-system-prompt`.
 
-## 명시적 vs 자동의 차이
+## Explicit vs. auto
 
 ```yaml
-# 라인에서 명시
+# Explicit, declared in the line yaml
 bot:
   skills:
-    - coding-style    # 항상 포함
+    - coding-style    # always included
 ```
 
 ```markdown
 ---
-triggers: ["payment", "결제"]
+triggers: ["payment", "checkout"]
 ---
-# 입력에 "결제"가 있으면 자동 포함
+# Auto-included whenever the input mentions "payment" or "checkout"
 ```
 
-- **항상 적용되어야 하는 규약** (코드 스타일, lint 규칙) → 명시적
-- **특정 도메인에서만 의미 있는 지식** (결제, 인증, 보안) → 자동
+- **Conventions that always apply** (style, lint rules) → explicit
+- **Knowledge meaningful only in specific domains** (payments, auth,
+  security) → auto
 
-## 좋은 스킬의 모양
+## Anatomy of a good skill
 
-### 1. 작고 한 가지에 집중
+### 1. Small and single-purpose
 
 ```markdown
 ---
@@ -72,57 +76,60 @@ triggers: ["i18n", "translation"]
 ---
 # i18n Conventions
 
-- 모든 사용자 향 텍스트는 `i18n/<lang>.json`에 키로 분리
-- 키 명명: `<scope>.<screen>.<element>` (예: `auth.login.submit_button`)
-- 새 언어 추가 시 `lib/i18n/index.ts`의 `SUPPORTED_LOCALES` 업데이트
+- All user-facing strings live as keys in `i18n/<lang>.json`
+- Key naming: `<scope>.<screen>.<element>` (e.g. `auth.login.submit_button`)
+- When adding a new locale, update `SUPPORTED_LOCALES` in `lib/i18n/index.ts`
 ```
 
-5~15줄이 좋습니다. 100줄짜리 스킬은 LLM이 무시할 가능성이 큼.
+5–15 lines is ideal. A 100-line skill is likely to be ignored by the LLM.
 
-### 2. WHY를 짧게 포함
+### 2. Include short *why*s
 
 ```markdown
-- 환불은 항상 `payments.refund` 함수로만 — 직접 DB UPDATE 금지
-  (이유: 환불 로그가 audit_log 테이블에 자동 기록되어야 함, 컴플라이언스)
+- Refunds always go through `payments.refund` — never raw DB UPDATE
+  (Reason: the audit_log table must capture every refund automatically;
+  required for compliance.)
 ```
 
-WHY가 있으면 LLM이 새로운 상황에서도 원칙을 적용합니다.
+A reason lets the LLM apply the principle to new situations the rule
+didn't explicitly cover.
 
-### 3. 안티패턴을 명시
+### 3. Spell out anti-patterns
 
 ```markdown
-## 절대 하지 말 것
+## Never do
 
-- `process.env.DATABASE_URL`을 직접 참조 (`config/database.ts`만 사용)
-- `setTimeout`으로 순서 동기화 (`await` 또는 `Promise` 활용)
-- 새 종속성 추가 시 의논 없이 (PR 설명에 사유 필수)
+- Reference `process.env.DATABASE_URL` directly — use `config/database.ts`
+- Sequence work with `setTimeout` — use `await` / `Promise`
+- Add a new dependency without discussion — PR description must justify it
 ```
 
-## 스킬 우선순위
+## Skill priority
 
-같은 이름의 스킬이 두 곳에 있으면 **사용자 디렉토리(.factory/skills/)** 가
-번들된 디폴트보다 우선합니다. 사용자가 `coding-style.md`를 자기 입맛에 맞게
-override할 수 있습니다.
+If the same skill name exists in two places, the user directory
+(`.factory/skills/`) wins over any bundled default. This lets users
+override `coding-style.md` etc. to fit their project.
 
-## 디버깅
+## Debugging
 
-특정 run에서 어떤 스킬이 실제로 주입됐는지 확인:
+To see exactly which skills were injected for a given run:
 
 ```bash
 cat .factory/runs/<runId>/stations/<station>/prompt.md
 ```
 
-`prompt.md`는 LLM에 보낸 user 메시지 본문입니다. 스킬은 system prompt로
-들어가므로 `trace.jsonl`에서 `bot_start` 이벤트의 `data.skills`로 확인:
+`prompt.md` is the user message sent to the LLM. Skills go into the system
+prompt — to inspect them, look for the `bot_start` event in the trace:
 
 ```bash
 grep '"type":"bot_start"' .factory/runs/<runId>/trace.jsonl | head -1 | jq .
 ```
 
-## 미래 (v2): Skill Marketplace
+## Future (v2): Skill marketplace
 
-frontmatter의 `agent` 키는 v2를 위한 예약 영역입니다. 예정된 기능:
+The frontmatter `agent` key is reserved for v2. Planned features:
 
-- 스킬을 *sub-agent 정의*로 등록 — main bot이 자동 발견하고 위임
-- 트리거 매칭으로 동적 라인업 구성
-- A/B 측정으로 어느 스킬 조합이 결과 품질에 기여하는지 학습
+- Register a skill as a *sub-agent definition* — the main bot can discover
+  and delegate automatically
+- Trigger-driven dynamic line composition
+- A/B measurement of which skill combinations contribute to output quality

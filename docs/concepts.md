@@ -1,135 +1,150 @@
 # Concepts
 
-핵심 용어들의 정의.
+Definitions of the core terms used throughout AI Factory.
 
 ## Project Root
 
-`.git` 디렉토리가 있는 폴더. AI Factory는 항상 가장 가까운 부모 git 저장소를
-project root로 인식합니다. 모든 상태는 `<projectRoot>/.factory/`에 저장.
+The folder that contains a `.git` directory. AI Factory always treats the
+nearest ancestor git repository as the project root. All factory state lives
+in `<projectRoot>/.factory/`.
 
 ## Line
 
-선언적 워크플로우. `.factory/lines/<name>.yaml`로 정의. 한 라인은 station의
-순차 시퀀스이며 하나의 input을 받아 하나의 결과(보통 git branch)로 끝납니다.
+A declarative workflow defined in `.factory/lines/<name>.yaml`. A line is a
+sequential list of stations that takes one input and produces one outcome
+(usually a git branch).
 
-다음 셋이 동봉:
+Bundled lines:
 
 - `feature` — clarify → implement → review → gate
 - `bugfix` — reproduce → fix → review → gate
 - `refactor` — plan → refactor → review → gate
-- `intake-only` — ingest만
+- `intake-only` — ingest only
 
-라인은 yaml이므로 추가/수정이 자유롭습니다. 자세히는 [line-spec.md](line-spec.md).
+Lines are pure YAML, so adding or modifying them is straightforward. See
+[line-spec.md](line-spec.md) for the full schema.
 
 ## Station
 
-라인의 한 단계. 4가지 종류:
+A single step inside a line. There are four kinds:
 
-| Kind | 역할 |
+| Kind | Role |
 |------|------|
-| `ingest` | 사용자 문서를 검색 가능한 형태로 인덱싱 |
-| `llm` | LLM에게 작업 위임 (보통 코드 작성/분석) |
-| `review` | 다른 LLM이 결과를 평가 (Negotiation Loop) |
-| `gate` | 사람이 승인/거부 → 머지 또는 폐기 |
+| `ingest` | Index user-supplied documents into a searchable form |
+| `llm` | Delegate work to an LLM (typically code authoring or analysis) |
+| `review` | Have a different LLM evaluate the result (Negotiation Loop) |
+| `gate` | Human approves / rejects → merge or discard |
 
 ## Worktree
 
-`station.worktree: true`일 때 그 station은 격리된 git worktree에서 실행됩니다.
+When a station is declared with `worktree: true`, that station runs inside
+an isolated git worktree.
 
-- 위치: `.factory/sandbox/<sanitized-branch>/`
-- 브랜치: `factory/<line>/<runId>/<station>`
-- LLM은 그 디렉토리에서만 파일 편집 가능
-- 가장 최근의 worktree-bearing station만 gate에 carry over (이전 worktree는
-  자동 정리)
-- gate 승인 시 fast-forward 머지, 거부 시 자동 정리
+- Location: `.factory/sandbox/<sanitized-branch>/`
+- Branch: `factory/<line>/<runId>/<station>`
+- The LLM can only edit files inside that directory
+- Only the most-recent worktree-bearing station carries forward to the gate
+  (earlier worktrees are auto-released)
+- On gate approval the worktree branch is fast-forward merged; on rejection
+  the worktree is cleaned up
 
 ## Bot
 
-LLM 인스턴스 + persona + 모델 + 스킬의 집합.
+The combination of an LLM instance, a persona, a model, and skills.
 
 ```yaml
 bot:
-  name: coder              # 표시 이름
-  model: claude-sonnet-4-6 # Claude Code에 전달할 model id
-  persona: |               # 시스템 프롬프트 추가
+  name: coder              # display name
+  model: claude-sonnet-4-6 # model id passed to Claude Code
+  persona: |               # appended to the system prompt
     You are a senior implementer...
-  skills:                  # 명시적 스킬 (trigger 무관 항상 포함)
+  skills:                  # explicit skills (always injected, regardless of triggers)
     - coding-style
 ```
 
 ## Skill
 
-`.md` 파일에 담긴 도메인 지식. `.factory/skills/`에 둠.
+Domain knowledge stored as a `.md` file under `.factory/skills/`.
 
-- **frontmatter triggers**: 입력에 키워드가 있으면 자동 주입
-- **frontmatter agent.name**: (v2 예약) 별도 에이전트로 등록 가능
-- **본문**: 자유 markdown — 이게 LLM 시스템 프롬프트에 추가됨
+- **frontmatter `triggers`**: keywords that auto-inject the skill when found
+  in the input
+- **frontmatter `agent.name`**: (reserved for v2) register the skill as a
+  separate sub-agent
+- **body**: free-form markdown — appended to the LLM's system prompt
 
-스킬은 코드 변경 없이 도메인 지식을 확장하는 1차 메커니즘입니다.
+Skills are the primary mechanism for extending domain knowledge without
+touching code.
 
 ## Run
 
-라인 한 번 실행 = 1 run. 고유한 `runId`(예: `2026-04-28-feature-abc123`)를
-가지며 `.factory/runs/<runId>/`에 모든 산출물이 저장됩니다.
+A single execution of a line. Each run gets a unique `runId` (e.g.
+`2026-04-28-feature-abc123`) and stores all artifacts under
+`.factory/runs/<runId>/`.
 
 ```
 runs/<runId>/
-├── summary.json    # 결과 메타데이터
-├── trace.jsonl     # 모든 LLM 이벤트
+├── summary.json    # outcome metadata
+├── trace.jsonl     # every LLM event
 └── stations/<name>/
-    ├── output.md   # station 산출물
-    └── prompt.md   # 실제로 보낸 프롬프트
+    ├── output.md   # station's produced text
+    └── prompt.md   # the exact prompt sent
 ```
 
 ## Trace
 
-`trace.jsonl` — append-only 이벤트 스트림. 한 줄에 한 이벤트 (JSON).
-재현/디버깅/메모리 분석의 원천 데이터.
+`trace.jsonl` — append-only event stream, one JSON event per line. The raw
+data source for replay, debugging, and memory analysis.
 
-이벤트 타입: `run_start`, `station_start`, `bot_start`, `tool_use`,
+Event types: `run_start`, `station_start`, `bot_start`, `tool_use`,
 `tool_result`, `subagent_start`, `subagent_end`, `review_round`, `bot_end`,
 `station_end`, `budget_warn`, `budget_exhaust`, `error`, `run_end`.
 
 ## Memory
 
-`.factory/memory.jsonl` — 모든 run을 가로지르는 station 결과 누적. 한 줄에
-한 station 실행 (line, station, bot, model, status, verdict, score, cost,
-tokens, duration, defects).
+`.factory/memory.jsonl` — cumulative station outcomes across every run. One
+line per station execution: line, station, bot, model, status, verdict,
+score, cost, tokens, duration, defects.
 
-`factory insights`로 집계.
+`factory insights` aggregates this file.
 
 ## Intake Snapshot
 
-`factory intake <files...>` 결과물. `.factory/intake/<snapshot-id>/`에:
+The output of `factory intake <files...>`, stored at
+`.factory/intake/<snapshot-id>/`:
 
-- `manifest.json` — 메타데이터
-- `raw/<source>.txt` — 추출된 원문
-- `index.jsonl` — 청크 + 토큰 (BM25용)
-- `summary.md` — LLM 요약 (1페이지)
-- `decisions.md` — Decided / Ambiguous 분류
+- `manifest.json` — metadata
+- `raw/<source>.txt` — extracted plain text
+- `index.jsonl` — chunks with tokens (used by BM25)
+- `summary.md` — LLM digest (≈1 page)
+- `decisions.md` — Decided / Ambiguous classification
 
-라인의 station이 `canSearchIntake: true`이면 가장 최근 스냅샷을 자동 검색.
+Stations declared with `canSearchIntake: true` automatically search the
+latest snapshot.
 
 ## Budget
 
-토큰/비용/시간/도구호출의 hard cap. 라인별 설정 가능. 80%에서 warn, 100%에서
-중단(awaiting_human). 재개 시 새로 시작.
+A hard cap on tokens / cost / duration / tool calls. Configurable per line.
+At 80% the run warns; at 100% it halts as `awaiting_human`. A resume starts
+the budget fresh.
 
 ## Negotiation
 
-리뷰가 PASS가 아닐 때 main bot에게 ACCEPT/DISPUTE를 묻는 라운드.
+When a review verdict is not PASS, the conductor asks the main bot to
+ACCEPT or DISPUTE.
 
-- ACCEPT → main이 새 draft 작성, 다음 라운드 review
-- DISPUTE → 1줄 반박 후 종료 (verdict는 WARN로 격하)
+- ACCEPT → main produces a new draft; the next round re-reviews it
+- DISPUTE → one-paragraph rebuttal; the loop ends with verdict downgraded
+  to WARN
 
-`maxNegotiations`(기본 2)까지 반복.
+Repeats up to `maxNegotiations` (default 2).
 
 ## Verdict
 
-`PASS` / `WARN` / `FAIL`. 리뷰의 결론. score(0-100)와 함께 표기.
+`PASS` / `WARN` / `FAIL`. The reviewer's conclusion, paired with a 0–100
+score.
 
-| Verdict | 의미 |
+| Verdict | Meaning |
 |---------|------|
-| PASS | threshold 이상, 그대로 진행 |
-| WARN | 개선 가능하지만 진행 (gate에서 사람이 결정) |
-| FAIL | 차단, 재작업 필요 |
+| PASS | Score ≥ threshold; proceed unchanged |
+| WARN | Could be improved but proceeds; the human gate decides |
+| FAIL | Block; rework required |

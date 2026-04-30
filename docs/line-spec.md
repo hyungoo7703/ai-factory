@@ -1,8 +1,8 @@
 # Line Spec
 
-`.factory/lines/<name>.yaml` 작성 레퍼런스.
+Reference for `.factory/lines/<name>.yaml`.
 
-## 최소 예시
+## Minimal example
 
 ```yaml
 name: hello
@@ -13,114 +13,116 @@ stations:
     kind: llm
     bot:
       name: greeter
-      persona: "Reply with a one-sentence greeting in Korean."
+      persona: "Reply with a one-sentence greeting."
 ```
 
-실행:
+Run it:
 
 ```bash
-factory run hello "프로젝트 시작"
+factory run hello "Project kickoff"
 ```
 
-## 전체 스키마
+## Full schema
 
 ```yaml
-name: <string>                  # 라인 식별자 (파일명과 일치 권장)
-description: <string>           # 표시용 설명
+name: <string>                  # line identifier (should match the filename)
+description: <string>           # display description
 
-# 라인 단위 예산 — 미지정 시 config.yaml 또는 내장 기본값
+# Line-level budget — falls back to config.yaml or built-in defaults
 budget:
   tokens: <number>
   costUsd: <number>
   durationMin: <number>
   toolCalls: <number>
-  subAgentMaxDepth: <number>    # 재귀 sub-agent 깊이 제한 (v2 예약)
-  subAgentMaxCount: <number>    # 한 main이 spawn할 수 있는 sub-agent 수
+  subAgentMaxDepth: <number>    # recursive sub-agent depth limit (reserved for v2)
+  subAgentMaxCount: <number>    # max sub-agents a single main bot may spawn
 
-stations:                       # 1+개 필수
-  - name: <string>              # 라인 내에서 unique
+stations:                       # one or more required
+  - name: <string>              # unique within the line
     kind: ingest|llm|review|gate
-    instructions: <path>        # 옵션: 추가 instructions.md 경로
-    optional: <bool>            # 옵션: 사용자가 생략 가능 (현재는 표시용)
-    worktree: <bool>            # llm station만 — 격리된 worktree 사용
-    canSearchIntake: <bool>     # llm/review만 — intake 검색 hint 주입
-    inputs:                     # 옵션: 사전 산출물 path (project root 기준)
+    instructions: <path>        # optional: extra instructions.md
+    optional: <bool>            # optional: skippable (display-only for now)
+    worktree: <bool>            # llm only — run inside an isolated worktree
+    canSearchIntake: <bool>     # llm/review — inject top BM25 intake hits
+    inputs:                     # optional: prerequisite paths (relative to project root)
       - <path>
-    outputs:                    # 옵션: 이 station이 반드시 만들어야 할 파일
+    outputs:                    # optional: files this station MUST produce
       - <path>
-    bot:                        # llm/review에서 사용
+    bot:                        # used by llm/review
       name: <string>
       model: <string>           # Claude Code model id
       persona: <multiline>
-      skills:                   # 명시적 스킬 (trigger 무관 항상 포함)
+      skills:                   # explicit skills (always injected)
         - <skill-name-or-path>
-    reviewOf: <string>          # review만 — 평가할 station 이름
-    passThreshold: <0-100>      # review만 — 통과 점수 (default 80)
-    maxNegotiations: <number>   # review만 — Negotiation 라운드 (default 2)
-    budget:                     # 옵션: 이 station만의 예산 override
+    reviewOf: <string>          # review only — name of the station being reviewed
+    passThreshold: <0-100>      # review only — passing score (default 80)
+    maxNegotiations: <number>   # review only — negotiation rounds (default 2)
+    budget:                     # optional: per-station budget override
       tokens: <number>
       ...
 ```
 
-## kind별 동작
+## Behavior by `kind`
 
 ### `ingest`
 
-- 사용자 입력에서 path를 추출(`ctx.input` 줄별 검사) + `station.inputs`
-- 모든 path를 ingest 파이프라인에 통과 → snapshot 생성
-- `ctx.intakeId`에 snapshot id 바인딩 → 다음 station들이 검색 가능
+- Collects paths from the user input (line-by-line) and `station.inputs`
+- Runs each through the ingest pipeline → snapshot
+- Binds `ctx.intakeId` so subsequent stations can search the snapshot
 
 ### `llm`
 
-- 옵션으로 worktree 생성
-- 프롬프트 조립:
-  1. `instructions.md` (있으면)
-  2. 사용자 입력
-  3. 이전 station들의 output (chained context)
-  4. (canSearchIntake이면) intake 검색 top-5
-  5. working directory 안내 + 필수 outputs 안내
-- explicit + auto-matched skills를 system prompt에 append
-- bot 호출, 모든 이벤트 trace
-- worktree에서 변경사항 자동 commit
+- Optionally creates a worktree
+- Builds the prompt from:
+  1. `instructions.md` (if set)
+  2. The user input
+  3. Outputs of prior stations (chained context)
+  4. Top-5 BM25 hits from intake (when `canSearchIntake`)
+  5. Working-directory notice + required-output reminder
+- Appends explicit + auto-matched skills to the system prompt
+- Calls the bot, traces every event
+- Auto-commits worktree changes
 
 ### `review`
 
-- `reviewOf`로 지정된 station의 output을 입력으로 받음
-- Negotiation Loop (최대 `maxNegotiations` 라운드)
-- JSON verdict 파싱 (실패 시 휴리스틱 fallback)
-- 점수 ≥ threshold이면 PASS
+- Reads the output of the station named in `reviewOf`
+- Runs the Negotiation Loop (up to `maxNegotiations` rounds)
+- Parses a JSON verdict block (heuristic fallback if parsing fails)
+- PASS when score ≥ threshold
 
 ### `gate`
 
-- 직전 worktree-bearing station의 worktree를 carry-over
-- CLI에서 사용자에게 approve/reject/discard 프롬프트 (--yes로 자동 승인)
-- approve → fast-forward merge → branch 보존
-- reject → 중단, branch 유지
-- discard → worktree 제거, branch 삭제
+- Carries forward the worktree of the most recent worktree-bearing station
+- Prompts the user for approve / reject / discard (`--yes` auto-approves)
+- approve → fast-forward merge → branch retained
+- reject → stop, branch retained
+- discard → remove worktree, delete branch
 
-## Skill 참조 방식
+## How `bot.skills` resolves
 
-`bot.skills:`는 다음 셋 중 하나를 받습니다.
+`bot.skills:` accepts any of three forms:
 
 ```yaml
 bot:
   skills:
-    - coding-style                                   # 스킬 이름 (.md 자동 추가)
-    - skills/payment.md                              # 프로젝트 상대 path
-    - /absolute/path/to/skill.md                     # 절대 path
+    - coding-style                                   # bare name (.md auto-appended)
+    - skills/payment.md                              # path relative to project root
+    - /absolute/path/to/skill.md                     # absolute path
 ```
 
-## Persona 작성 팁
+## Persona authoring tips
 
-- **목적과 제약을 명확히** — *"무엇을 한다"*보다 *"무엇은 하지 않는다"*
-- **출력 형식 강제** — Review station은 JSON verdict가 필수
-- **컨텍스트 사이즈 제한** — *"3페이지 이상의 산출물 금지"* 같은 명시
-- **persona는 frontmatter처럼** — 본격 instructions은 `instructions:` 파일로 분리
+- **Be precise about purpose AND constraints** — *"don't do X"* matters as
+  much as *"do X"*
+- **Force the output format** — review stations require a JSON verdict
+- **Cap output size** — e.g. *"no more than 3 pages of output"*
+- **Keep persona short, detailed instructions in `instructions:`** — don't
+  cram long task descriptions into `persona`
 
-## 예: 다단 sub-agent 설계 (v1: 명시적)
+## Example: explicit multi-stage sub-agents (v1)
 
-현재 MVP는 sub-agent를 yaml로 fix할 수 없습니다. 대신 main bot의 persona에서
-**"Task tool로 다음 sub-agent들을 호출"**을 강제하는 방식으로 구현:
+The MVP doesn't let you declare sub-agents in YAML directly. Instead, force
+the main bot's persona to delegate via Claude Code's Task tool:
 
 ```yaml
 - name: implement
@@ -137,15 +139,15 @@ bot:
       Do not write code yourself — delegate via Task.
 ```
 
-이렇게 하면 Claude Code의 Task tool이 sub-agent 격리/병렬을 알아서 처리합니다.
-v2에서는 이를 yaml로 선언적으로 표현할 예정.
+Claude Code's Task tool handles sub-agent isolation and parallelism on its
+own. v2 will let you declare this more directly in YAML.
 
-## 라인 검증
+## Line validation
 
-라인 yaml은 로드 시 자동 검증됩니다. 자주 보는 에러:
+Line YAML is validated on load. Common errors:
 
-- `line.name is required` — yaml 최상위 `name:` 필요
-- `Duplicate station name` — 라인 내 station 이름 unique
+- `line.name is required` — the top-level `name:` field is missing
+- `Duplicate station name` — station names must be unique within a line
 - `Review station 'X' must specify 'reviewOf'`
-- `Station 'X' references unknown station 'Y'` — reviewOf가 존재하지 않음
+- `Station 'X' references unknown station 'Y'` — `reviewOf` target missing
 - `passThreshold must be 0-100`
