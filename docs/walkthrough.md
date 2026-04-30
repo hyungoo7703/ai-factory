@@ -42,10 +42,19 @@ clone (see [README](../README.md)).
 ```bash
 mkdir scratch-payment && cd scratch-payment
 git init
-git commit --allow-empty -m "chore: init"
+echo "node_modules/" > .gitignore
+git add .gitignore
+git commit -m "chore: init"
 
 factory init
 ```
+
+> ⚠️ **Add `.gitignore` before the first commit.** The implement station may
+> run `npm install` inside its worktree to set up test runners. Without a
+> `.gitignore`, the auto-commit captures `node_modules/` in the worktree
+> branch, and the gate's fast-forward merge will fail later on when your
+> own working tree also has an untracked `node_modules/`. Any project
+> running JS/TS code generation should ignore `node_modules/` from day one.
 
 You should see:
 
@@ -306,3 +315,4 @@ If all seven appear in a single run, the install is healthy.
 | `Not a git repository` | Ran factory outside a git project | `git init && git commit --allow-empty -m init` |
 | Run halts at gate every time even with `-y` | One of the prior stations was marked FAIL | Inspect `summary.json`; the gate refuses to auto-merge failures by design |
 | `git worktree add` fails | Stale worktree from a crash | `git worktree prune` then re-run; the conductor also does this on next acquire |
+| `gate merge failed: untracked working tree files would be overwritten by merge: node_modules/...` | Project had no `.gitignore`, so the implement station's worktree committed `node_modules/`. The user's working tree also has an untracked `node_modules/`, so fast-forward refuses to overwrite it. | Add `.gitignore` with `node_modules/` *before* the initial commit. Recover an in-flight run by moving your local `node_modules/` aside, running `git merge --ff-only <factory-branch>`, then committing a `.gitignore` and running `git rm -r --cached node_modules` to untrack it. |
